@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 프롬프트 작성 도우미 — 한백</title>
+<style>
+  :root {
+    --bg: #f6f4ee;
+    --surface: #fffdf8;
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --ink-faint: #888;
+    --rule: #d8d4c7;
+    --rule-soft: #e8e4d6;
+    --done: #4a7a5c;
+    --code-bg: #2a2825;
+    --code-ink: #f0ebe0;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 12px rgba(0,0,0,.04);
+
+    /* 모드별 액센트 — JS에서 동적 변경 */
+    --accent: #2e5e3e;
+    --accent-soft: #d8e6dc;
+  }
+  body[data-mode="standard"] {
+    --accent: #4a5e8a;
+    --accent-soft: #d8dfeb;
+  }
+  body[data-mode="automation"] {
+    --accent: #b8392b;
+    --accent-soft: #f5d9d4;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Pretendard', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+
+  /* Header */
+  header {
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .eyebrow {
+    font-family: 'IBM Plex Mono', 'D2 Coding', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+    transition: color .3s ease;
+  }
+  h1 {
+    font-family: 'Noto Serif KR', 'Pretendard', serif;
+    font-weight: 700;
+    font-size: 28px;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    color: var(--ink-soft);
+    font-size: 14px;
+  }
+
+  /* Mode Selector */
+  .mode-selector {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    margin-bottom: 28px;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+  }
+  @media (max-width: 600px) {
+    .mode-selector { grid-template-columns: 1fr; }
+  }
+  .mode-btn {
+    padding: 16px 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--ink-soft);
+    transition: all .15s ease;
+    border-right: 1px solid var(--rule);
+    text-align: left;
+    position: relative;
+  }
+  .mode-btn:last-child { border-right: none; }
+  @media (max-width: 600px) {
+    .mode-btn { border-right: none; border-bottom: 1px solid var(--rule); }
+    .mode-btn:last-child { border-bottom: none; }
+  }
+  .mode-btn:hover { background: var(--bg); }
+  .mode-btn.active {
+    background: var(--accent);
+    color: var(--surface);
+  }
+  .mode-btn .mode-name {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 4px;
+    font-size: 14px;
+  }
+  .mode-btn .mode-desc {
+    font-size: 11px;
+    opacity: 0.85;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+
+  /* Mode panels */
+  .mode-panel { display: none; }
+  .mode-panel.active { display: block; }
+
+  /* Tip box */
+  .tip {
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    padding: 14px 18px;
+    margin-bottom: 24px;
+    font-size: 13px;
+    color: var(--ink);
+    transition: all .3s ease;
+  }
+  .tip strong {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  /* Progress (자동화 모드용) */
+  .progress {
+    margin-bottom: 24px;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .progress-bar-wrap {
+    flex: 1;
+    height: 4px;
+    background: var(--rule-soft);
+    margin: 0 16px;
+    position: relative;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width .3s ease, background .3s ease;
+  }
+
+  /* Section */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 24px 26px 22px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  .section.required::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    transition: background .3s ease;
+  }
+  .section.optional::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--rule);
+  }
+
+  /* CRISP letter */
+  .section-letter {
+    display: inline-block;
+    font-family: 'Noto Serif KR', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-right: 10px;
+    line-height: 1;
+    vertical-align: middle;
+    transition: color .3s ease;
+  }
+  .section.optional .section-letter { color: var(--ink-faint); }
+
+  /* 자동화 모드 number */
+  .section-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 4px;
+  }
+  .section.required .section-tag { color: var(--accent); }
+  .q-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-right: 8px;
+  }
+
+  .q-title {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    line-height: 1.3;
+    display: inline-block;
+    vertical-align: middle;
+  }
+  .q-required, .q-optional {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    margin-left: 8px;
+  }
+  .q-required { color: var(--accent); }
+  .q-optional { color: var(--ink-faint); }
+  .q-hint {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+    margin-bottom: 14px;
+  }
+
+  /* Inputs */
+  textarea, input[type="text"], select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    padding: 12px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink);
+    resize: vertical;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  textarea:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+  textarea { min-height: 70px; }
+
+  /* Checkbox group */
+  .checkbox-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  @media (max-width: 480px) {
+    .checkbox-group { grid-template-columns: 1fr; }
+  }
+  .checkbox-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all .15s ease;
+  }
+  .checkbox-item:hover { border-color: var(--ink-soft); }
+  .checkbox-item input { margin-top: 2px; cursor: pointer; }
+  .checkbox-item.checked {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+
+  /* Radio group */
+  .radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .radio-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    cursor: pointer;
+    transition: all .15s ease;
+  }
+  .radio-item:hover { border-color: var(--ink-soft); }
+  .radio-item input { margin-top: 4px; cursor: pointer; }
+  .radio-item.checked {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+  .radio-label {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+  .radio-desc {
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  /* Help toggle */
+  details.help {
+    margin-top: 12px;
+    border-top: 1px dashed var(--rule);
+    padding-top: 12px;
+  }
+  details.help summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--ink-faint);
+    list-style: none;
+    user-select: none;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.05em;
+  }
+  details.help summary::-webkit-details-marker { display: none; }
+  details.help summary::before { content: '▸ '; color: var(--accent); }
+  details.help[open] summary::before { content: '▾ '; }
+  details.help summary:hover { color: var(--accent); }
+  details.help .help-body {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border-left: 2px solid var(--accent);
+    font-size: 13px;
+    transition: border-color .3s ease;
+  }
+  details.help .help-body strong {
+    display: block;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    font-size: 11px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  details.help .help-body strong:first-child { margin-top: 0; }
+  details.help .help-body ul { padding-left: 18px; color: var(--ink-soft); }
+  details.help .help-body li { margin-bottom: 3px; }
+
+  .example-box {
+    margin-top: 8px;
+    padding: 10px 14px;
+    background: var(--rule-soft);
+    border-left: 2px solid var(--ink-faint);
+    font-size: 12px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+  .example-box .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    color: var(--ink-faint);
+  }
+
+  /* Module toggle (자동화 전용) */
+  .module-toggle {
+    margin: 24px 0 8px;
+    padding: 14px 20px;
+    background: var(--surface);
+    border: 1px dashed var(--rule);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    color: var(--ink-soft);
+    transition: all .15s ease;
+  }
+  .module-toggle:hover {
+    border-color: var(--ink-soft);
+    color: var(--ink);
+  }
+  .module-toggle.active {
+    border-style: solid;
+    border-color: var(--accent);
+    color: var(--ink);
+  }
+  .module-toggle-icon {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+  }
+
+  /* Generate */
+  .generate-section {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+  }
+  .checklist {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .checklist h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--ink-soft);
+  }
+  .checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    font-size: 13px;
+  }
+  .checklist-icon {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: bold;
+    width: 16px;
+  }
+  .checklist-icon.done { color: var(--done); }
+  .checklist-icon.todo { color: var(--ink-faint); }
+
+  .btn {
+    width: 100%;
+    padding: 16px;
+    background: var(--ink);
+    color: var(--surface);
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: background .15s ease;
+  }
+  .btn:hover { background: var(--accent); }
+  .btn:disabled {
+    background: var(--rule);
+    color: var(--ink-faint);
+    cursor: not-allowed;
+  }
+
+  /* Output */
+  .output {
+    margin-top: 28px;
+    display: none;
+  }
+  .output.visible { display: block; }
+  .output-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 8px;
+  }
+  .output-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .output-tab {
+    padding: 12px 20px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-faint);
+    transition: all .15s ease;
+    margin-bottom: -1px;
+  }
+  .output-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .output-tab:hover { color: var(--ink); }
+  .output-panel {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 24px;
+  }
+  .output-panel.tabbed { display: none; }
+  .output-panel.tabbed.active { display: block; }
+  .output-panel pre {
+    font-family: 'IBM Plex Mono', 'D2 Coding', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 500px;
+    overflow-y: auto;
+  }
+  .output-actions {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    background: var(--code-bg);
+    border-top: 1px solid #444;
+  }
+  .copy-btn {
+    flex: 1;
+    padding: 10px 14px;
+    background: var(--surface);
+    color: var(--ink);
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background .15s ease;
+  }
+  .copy-btn:hover { background: var(--accent-soft); }
+  .copy-btn.copied { background: var(--done); color: white; }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    font-size: 12px;
+    color: var(--ink-faint);
+    text-align: center;
+    line-height: 1.7;
+  }
+  .reset-link {
+    background: none;
+    border: none;
+    color: var(--ink-faint);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    text-decoration: underline;
+    padding: 0;
+  }
+  .reset-link:hover { color: var(--accent); }
+</style>
+</head>
+<body data-mode="minimal">
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">한백 · AI 도구</div>
+  <h1>AI 프롬프트 작성 도우미</h1>
+  <div class="subtitle">상황에 맞는 모드를 고른 후, 빈칸을 채우면 AI에 붙여넣을 프롬프트가 생성됩니다.</div>
+</header>
+
+<!-- Mode Selector -->
+<div class="mode-selector">
+  <button class="mode-btn active" id="btn-minimal" onclick="setMode('minimal')">
+    <span class="mode-name">최소형</span>
+    <span class="mode-desc">R + I + S · 1~2분</span>
+  </button>
+  <button class="mode-btn" id="btn-standard" onclick="setMode('standard')">
+    <span class="mode-name">표준형 CRISP</span>
+    <span class="mode-desc">5개 항목 · 3~5분</span>
+  </button>
+  <button class="mode-btn" id="btn-automation" onclick="setMode('automation')">
+    <span class="mode-name">자동화 의뢰</span>
+    <span class="mode-desc">12개 항목 · 15~30분</span>
+  </button>
+</div>
+
+<div class="tip" id="tip-minimal">
+  <strong>최소형 — 일상 업무용</strong>
+  요약·번역·정리·간단한 작성 등 1회성 작업에. 역할(R)·요청(I)·결과 형식(S) 3개만 채우면 됩니다.
+</div>
+<div class="tip" id="tip-standard" style="display:none;">
+  <strong>표준형 CRISP — 중요 작업용</strong>
+  외부 발신·임원 보고·자동화 등록용 등 품질이 중요한 1회성 작업에. 배경(C)과 제약(P)을 추가로 설계합니다.
+</div>
+<div class="tip" id="tip-automation" style="display:none;">
+  <strong>자동화 의뢰 — 시스템·솔루션 의뢰용</strong>
+  반복·시스템화될 자동화를 만들 때. 단순 작업이 아니라 워크플로우·도구를 의뢰할 때 사용. 가장 시간이 걸리지만 가장 강력합니다.
+</div>
+
+<!-- ========================================================== -->
+<!-- 모드 1: 최소형 -->
+<!-- ========================================================== -->
+<div class="mode-panel active" id="panel-minimal">
+
+<form id="form-minimal" autocomplete="off">
+
+<div class="section required">
+  <div>
+    <span class="section-letter">R</span>
+    <span class="q-title">역할 (Role)</span>
+    <span class="q-required">REQUIRED</span>
+  </div>
+  <div class="q-hint">AI가 어떤 입장·관점에서 답하길 원하는가.</div>
+  <textarea id="m-r" data-required="true" placeholder="예:&#10;사내 회의록 정리 담당자로서&#10;경영진 보고용 작성자로서&#10;마케팅 카피라이터로서"></textarea>
+  <details class="help">
+    <summary>막히면 펼치세요</summary>
+    <div class="help-body">
+      <strong>이 질문에 답해보세요</strong>
+      <ul>
+        <li>이 일을 가장 잘하는 사람은 누구일까요?</li>
+        <li>외부 전문가에게 맡긴다면 어떤 분야 전문가가 적임자인가요?</li>
+      </ul>
+      <strong>흔한 실수</strong>
+      <ul>
+        <li>"전문가로서" — 무슨 분야 전문가인지 명시</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<div class="section required">
+  <div>
+    <span class="section-letter">I</span>
+    <span class="q-title">요청 (Instruction)</span>
+    <span class="q-required">REQUIRED</span>
+  </div>
+  <div class="q-hint">무엇을 해줘야 하는가. 구체적 동사로.</div>
+  <textarea id="m-i" data-required="true" placeholder="예:&#10;첨부 회의록을 핵심만 추려 공유용으로 다듬어줘.&#10;[입력 자료: 회의록 본문 또는 첨부]"></textarea>
+  <details class="help">
+    <summary>막히면 펼치세요</summary>
+    <div class="help-body">
+      <strong>이 질문에 답해보세요</strong>
+      <ul>
+        <li>구체적 동사로 시작: 요약·정리·번역·작성·검토·분석·분류·추출</li>
+        <li>입력 자료가 있나요?</li>
+        <li>여러 일을 한꺼번에 시키지 말 것</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<div class="section required">
+  <div>
+    <span class="section-letter">S</span>
+    <span class="q-title">결과물 형식 (Sample)</span>
+    <span class="q-required">REQUIRED</span>
+  </div>
+  <div class="q-hint">분량·형식·톤·구조.</div>
+  <textarea id="m-s" data-required="true" placeholder="예:&#10;- 분량: A4 1쪽 이내&#10;- 형식: Notion 마크다운, 개조식&#10;- 구조: 의사결정 사항 / 진행 안건 / 액션&#10;- 톤: 격식체"></textarea>
+  <details class="help">
+    <summary>막히면 펼치세요</summary>
+    <div class="help-body">
+      <strong>이 질문에 답해보세요</strong>
+      <ul>
+        <li>분량은? (글자수·문장수·쪽수)</li>
+        <li>형식은? (개조식·서술형·표·마크다운)</li>
+        <li>비슷한 결과물 중 마음에 들었던 게 있다면? — 그 형식 따라가기</li>
+      </ul>
+      <strong>비결</strong>
+      <ul>
+        <li>좋은 결과 예시 1개 첨부 = 품질 2배</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+</form>
+
+</div>
+
+<!-- ========================================================== -->
+<!-- 모드 2: 표준형 CRISP -->
+<!-- ========================================================== -->
+<div class="mode-panel" id="panel-standard">
+
+<form id="form-standard" autocomplete="off">
+
+<div class="section optional">
+  <div>
+    <span class="section-letter">C</span>
+    <span class="q-title">배경 (Context)</span>
+    <span class="q-optional">SELECTIVE</span>
+  </div>
+  <div class="q-hint">이 일이 왜 필요한가 / 누가 볼 것인가.</div>
+  <textarea id="s-c" placeholder="예:&#10;월간 임원 회의록을 부재했던 참석자에게 공유할 예정. 다음 분기 의사결정 안건과 연결됨."></textarea>
+  <details class="help">
+    <summary>막히면 펼치세요</summary>
+    <div class="help-body">
+      <strong>이 질문에 답해보세요</strong>
+      <ul>
+        <li>이 결과물을 누가 볼 건가요?</li>
+        <li>그 사람은 받아서 무엇을 할 건가요?</li>
+        <li>왜 지금 필요한가요?</li>
+      </ul>
+      <strong>비워둬도 되는 경우</strong>
+      <ul>
+        <li>혼자 쓰는 일회성 작업</li>
+        <li>맥락이 너무 자명한 경우</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<div class="section required">
+  <div>
+    <span class="section-letter">R</span>
+    <span class="q-title">역할 (Role)</span>
+    <span class="q-required">REQUIRED</span>
+  </div>
+  <div class="q-hint">AI가 어떤 입장·관점에서 답하길 원하는가.</div>
+  <textarea id="s-r" data-required="true" placeholder="예: 사내 회의록 정리 담당자로서"></textarea>
+  <details class="help">
+    <summary>막히면 펼치세요</summary>
+    <div class="help-body">
+      <strong>이 질문에 답해보세요</strong>
+      <ul>
+        <li>이 일을 가장 잘하는 사람은 누구일까요?</li>
+        <li>외부 전문가에게 맡긴다면 어떤 분야 전문가?</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<div class="section required">
+  <div>
+    <span class="section-letter">I</span>
+    <span class="q-title">요청 (Instruction)</span>
+    <span class="q-required">REQUIRED</span>
+  </div>
+  <div class="q-hint">무엇을 해줘야 하는가.</div>
+  <textarea id="s-i" data-required="true" placeholder="예: 첨부 회의록을 핵심만 추려 공유용으로 다듬어줘."></textarea>
+</div>
+
+<div class="section required">
+  <div>
+    <span class="section-letter">S</span>
+    <span class="q-title">결과물 형식 (Sample)</span>
+    <span class="q-required">REQUIRED</span>
+  </div>
+  <div class="q-hint">분량·형식·톤·구조.</div>
+  <textarea id="s-s" data-required="true" placeholder="예:&#10;- 분량: A4 1쪽 이내&#10;- 형식: Notion 마크다운, 개조식&#10;- 톤: 격식체"></textarea>
+</div>
+
+<div class="section optional">
+  <div>
+    <span class="section-letter">P</span>
+    <span class="q-title">제약·금지 (Policy)</span>
+    <span class="q-optional">SELECTIVE</span>
+  </div>
+  <div class="q-hint">하지 말아야 할 것.</div>
+  <textarea id="s-p" placeholder="예:&#10;- 추측하지 말 것. 자료에 없는 내용은 [확인필요]&#10;- '소중한', '따뜻한' 같은 클리셰 금지"></textarea>
+  <details class="help">
+    <summary>막히면 펼치세요</summary>
+    <div class="help-body">
+      <strong>자주 쓰이는 제약</strong>
+      <ul>
+        <li>"자료에 없는 내용은 [확인필요] 표시"</li>
+        <li>"추측·해석 금지, 사실만"</li>
+        <li>"AI 클리셰 금지"</li>
+        <li>"한 문장 30자 이내"</li>
+      </ul>
+      <strong>주의</strong>
+      <ul>
+        <li>금지 항목이 5개 넘으면 일부 무시됨</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+</form>
+
+</div>
+
+<!-- ========================================================== -->
+<!-- 모드 3: 자동화 의뢰 -->
+<!-- ========================================================== -->
+<div class="mode-panel" id="panel-automation">
+
+<div class="progress">
+  <span id="auto-progress-count">0 / 12</span>
+  <div class="progress-bar-wrap"><div class="progress-bar" id="auto-progress-bar"></div></div>
+  <span id="auto-progress-pct">0%</span>
+</div>
+
+<form id="form-automation" autocomplete="off">
+
+<!-- 필수 5개 -->
+<div class="section required">
+  <div class="section-tag">필수 · REQUIRED</div>
+  <div class="q-title"><span class="q-num">01</span>문제 정의</div>
+  <div class="q-hint">무엇이 / 왜 문제인가. 그로 인한 실제 손해는.</div>
+  <textarea id="a-q1" data-required="true" placeholder="예: 매월 여러 부서의 데이터를 수기로 취합하는데 4시간 소요 + 월평균 2건 오기 발생. 보고 신뢰도 저하."></textarea>
+  <details class="help">
+    <summary>막히면 펼치세요</summary>
+    <div class="help-body">
+      <strong>이 질문에 답해보세요</strong>
+      <ul>
+        <li>이 일 때문에 짜증 났던 최근 사례 한 개를 떠올려보세요</li>
+        <li>그 일이 잘못되면 누가 가장 곤란해지나요?</li>
+        <li>그 일에 시간이 얼마나 걸리고, 1년에 몇 번 발생하나요?</li>
+      </ul>
+      <strong>자가 점검</strong>
+      <ul>
+        <li>✓ 숫자(시간·횟수·금액)가 들어있다</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<div class="section required">
+  <div class="section-tag">필수 · REQUIRED</div>
+  <div class="q-title"><span class="q-num">02</span>현재 처리 방식 (As-Is)</div>
+  <div class="q-hint">지금은 누가 / 어떻게 / 어떤 도구로 처리하고 있는가.</div>
+  <textarea id="a-q2" data-required="true" placeholder="처리 단계를 시간순으로:&#10;1. ...&#10;2. ...&#10;사용 도구: ...&#10;가장 마찰이 큰 단계: ..."></textarea>
+  <details class="help">
+    <summary>막히면 펼치세요</summary>
+    <div class="help-body">
+      <strong>이 질문에 답해보세요</strong>
+      <ul>
+        <li>동료에게 인수인계할 때 매뉴얼을 어떻게 쓰시겠어요?</li>
+        <li>각 단계에서 어떤 도구를 켜시나요?</li>
+        <li>어느 단계가 가장 답답하신가요?</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<div class="section required">
+  <div class="section-tag">필수 · REQUIRED</div>
+  <div class="q-title"><span class="q-num">03</span>성공 기준</div>
+  <div class="q-hint">어떻게 되면 "해결됐다"고 말할 수 있는가. 측정 가능한 기준.</div>
+  <textarea id="a-q3" data-required="true" placeholder="예:&#10;- 처리 시간: 4시간 → 30분 이하&#10;- 오기 발생: 월 2건 → 월 0건&#10;판정 시점: 3개월 운영 후"></textarea>
+  <details class="help">
+    <summary>막히면 펼치세요</summary>
+    <div class="help-body">
+      <strong>이 질문에 답해보세요</strong>
+      <ul>
+        <li>3개월 뒤 "잘 됐어요?"에 무엇으로 답할 수 있을까요?</li>
+        <li>몇 분/시간으로 줄어야 만족하시겠어요?</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<div class="section required">
+  <div class="section-tag">필수 · REQUIRED</div>
+  <div class="q-title"><span class="q-num">04</span>솔루션 수명</div>
+  <div class="q-hint">이 자동화를 얼마나 오래 / 자주 쓸 것인가.</div>
+  <div class="radio-group">
+    <label class="radio-item"><input type="radio" name="a-q4" value="일회성" data-required="true">
+      <div><div class="radio-label">일회성</div><div class="radio-desc">이번 한 번만 돌리고 버림</div></div></label>
+    <label class="radio-item"><input type="radio" name="a-q4" value="반복 수동">
+      <div><div class="radio-label">반복 수동</div><div class="radio-desc">양식·프롬프트만 저장, 사람이 매번 실행</div></div></label>
+    <label class="radio-item"><input type="radio" name="a-q4" value="반복 자동">
+      <div><div class="radio-label">반복 자동</div><div class="radio-desc">정기적으로 자동 실행</div></div></label>
+    <label class="radio-item"><input type="radio" name="a-q4" value="상시 시스템">
+      <div><div class="radio-label">상시 시스템</div><div class="radio-desc">24/7 작동하는 도구·앱</div></div></label>
+  </div>
+</div>
+
+<div class="section required">
+  <div class="section-tag">필수 · REQUIRED</div>
+  <div class="q-title"><span class="q-num">05</span>결과물 위치</div>
+  <div class="q-hint">자동화 결과물이 어디로 가는가. 누가 / 언제 / 어떻게 보는가.</div>
+  <textarea id="a-q5" data-required="true" placeholder="예:&#10;- 저장: Notion > 부서 > 데이터 DB&#10;- 알림: 사내 메신저 채널&#10;- 보는 사람: 부서장, 본부장&#10;- 시점: 매월 5일 오전 9시"></textarea>
+</div>
+
+<!-- 권장 7개 -->
+<div class="section optional">
+  <div class="section-tag">권장 · RECOMMENDED</div>
+  <div class="q-title"><span class="q-num">06</span>산출물 형식</div>
+  <div class="checkbox-group" id="a-q6-group">
+    <label class="checkbox-item"><input type="checkbox" name="a-q6" value="Notion 마크다운"><span>Notion 마크다운</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q6" value="일반 마크다운(.md)"><span>일반 마크다운(.md)</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q6" value="Word(.docx)"><span>Word(.docx)</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q6" value="PDF"><span>PDF</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q6" value="Excel(.xlsx)"><span>Excel(.xlsx)</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q6" value="PowerPoint(.pptx)"><span>PowerPoint(.pptx)</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q6" value="HTML 페이지"><span>HTML 페이지</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q6" value="JSON / API 응답"><span>JSON / API 응답</span></label>
+  </div>
+  <input type="text" id="a-q6-other" placeholder="기타 형식 (자유 입력)" style="margin-top: 8px;">
+</div>
+
+<div class="section optional">
+  <div class="section-tag">권장 · RECOMMENDED</div>
+  <div class="q-title"><span class="q-num">07</span>결과물 예시</div>
+  <div class="q-hint">참고할 만한 예시 또는 링크. 가장 강력한 항목.</div>
+  <textarea id="a-q7" placeholder="예:&#10;- 첨부: 지난달 회의록 (수기 정리본) Notion 링크&#10;- 외부 사례 URL"></textarea>
+</div>
+
+<div class="section optional">
+  <div class="section-tag">권장 · RECOMMENDED</div>
+  <div class="q-title"><span class="q-num">08</span>참고 링크·자료</div>
+  <div class="q-hint">관련된 사내 문서·외부 자료. 3개 이내, 진짜 관련된 것만.</div>
+  <textarea id="a-q8" placeholder="예:&#10;- 사내 회의록 표준 양식 (Notion)&#10;- 음성 전사 도구 API 문서"></textarea>
+</div>
+
+<div class="section optional">
+  <div class="section-tag">권장 · RECOMMENDED</div>
+  <div class="q-title"><span class="q-num">09</span>톤·문체</div>
+  <div class="checkbox-group" id="a-q9-group">
+    <label class="checkbox-item"><input type="checkbox" name="a-q9" value="개조식(bullet)"><span>개조식 (bullet)</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q9" value="서술형(문장)"><span>서술형 (문장)</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q9" value="격식체(공문)"><span>격식체 (공문)</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q9" value="평이체(사내안내)"><span>평이체 (사내안내)</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q9" value="비격식(캐주얼)"><span>비격식</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q9" value="분석적"><span>분석적</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q9" value="한국어"><span>한국어</span></label>
+    <label class="checkbox-item"><input type="checkbox" name="a-q9" value="영어"><span>영어</span></label>
+  </div>
+</div>
+
+<div class="section optional">
+  <div class="section-tag">권장 · RECOMMENDED</div>
+  <div class="q-title"><span class="q-num">10</span>솔루션 형태</div>
+  <div class="q-hint">모르겠으면 비워두면 AI가 추천.</div>
+  <div class="radio-group">
+    <label class="radio-item"><input type="radio" name="a-q10" value="">
+      <div><div class="radio-label">모르겠음 (AI 추천 요청)</div><div class="radio-desc">권장</div></div></label>
+    <label class="radio-item"><input type="radio" name="a-q10" value="AI 프롬프트만">
+      <div><div class="radio-label">AI 프롬프트만</div><div class="radio-desc">사람이 매번 실행</div></div></label>
+    <label class="radio-item"><input type="radio" name="a-q10" value="노코드 워크플로우">
+      <div><div class="radio-label">노코드 워크플로우</div><div class="radio-desc">Zapier·Make·n8n</div></div></label>
+    <label class="radio-item"><input type="radio" name="a-q10" value="노코드 앱">
+      <div><div class="radio-label">노코드 앱</div><div class="radio-desc">Notion·Glide·Bubble</div></div></label>
+    <label class="radio-item"><input type="radio" name="a-q10" value="스크립트">
+      <div><div class="radio-label">스크립트</div><div class="radio-desc">Python·GAS·VBA</div></div></label>
+    <label class="radio-item"><input type="radio" name="a-q10" value="웹 앱">
+      <div><div class="radio-label">웹 앱</div><div class="radio-desc">자체 개발·SaaS</div></div></label>
+    <label class="radio-item"><input type="radio" name="a-q10" value="Excel/Sheets 매크로">
+      <div><div class="radio-label">Excel/Sheets 매크로</div><div class="radio-desc">VBA·Apps Script</div></div></label>
+  </div>
+</div>
+
+<div class="section optional">
+  <div class="section-tag">권장 · RECOMMENDED</div>
+  <div class="q-title"><span class="q-num">11</span>사용자·빈도</div>
+  <textarea id="a-q11" placeholder="예:&#10;- 사용자: 인사팀 3명 (IT 친숙도 중간)&#10;- 빈도: 월 1회&#10;- 동시 사용: 없음"></textarea>
+</div>
+
+<div class="section optional">
+  <div class="section-tag">권장 · RECOMMENDED</div>
+  <div class="q-title"><span class="q-num">12</span>제약사항</div>
+  <textarea id="a-q12" placeholder="예:&#10;- 보안: 직원 개인정보 외부 AI 입력 불가&#10;- 예산: 월 5만원 이내&#10;- 기술: 회사 PC SW 설치 불가"></textarea>
+</div>
+
+<!-- 선택 모듈 -->
+<div class="module-toggle" id="m1-toggle" onclick="toggleAutoModule('m1')">
+  <span><strong>M1. 사전 조사 요구</strong> — 자동화 전 표준·사례 조사 필요시</span>
+  <span class="module-toggle-icon" id="m1-icon">+ 추가</span>
+</div>
+<div class="section optional" id="m1-section" style="display:none;">
+  <div class="section-tag">선택 모듈</div>
+  <div class="q-title">M1. 사전 조사 요구</div>
+  <textarea id="a-m1" placeholder="예:&#10;- 조사 주제: 회의록 자동화 사례 (동종 업계)&#10;- 조사 깊이: 개요 (3~5개 사례)&#10;- 산출물: 비교 매트릭스 + 적용 권고 3개 옵션"></textarea>
+</div>
+
+<div class="module-toggle" id="m2-toggle" onclick="toggleAutoModule('m2')">
+  <span><strong>M2. 단계별 검증·승인</strong> — 복잡한 자동화에 권장</span>
+  <span class="module-toggle-icon" id="m2-icon">+ 추가</span>
+</div>
+<div class="section optional" id="m2-section" style="display:none;">
+  <div class="section-tag">선택 모듈</div>
+  <div class="q-title">M2. 단계별 검증·승인</div>
+  <textarea id="a-m2" placeholder="예:&#10;1단계: 요구사항 정리 → 검토자 선정&#10;2단계: 도구 비교 → 결정&#10;3단계: 프로토타입 → 사용자 테스트&#10;4단계: 실 운영 1개월&#10;5단계: 회고"></textarea>
+</div>
+
+<!-- 메타 -->
+<div class="section optional">
+  <div class="section-tag">META</div>
+  <div class="q-title">기본 정보</div>
+  <input type="text" id="a-meta-title" placeholder="자동화 제목 (예: 월간 회의록 자동 정리·배포)" style="margin-bottom:8px;">
+  <input type="text" id="a-meta-author" placeholder="의뢰자 이름·부서">
+</div>
+
+</form>
+
+</div>
+
+<!-- ========================================================== -->
+<!-- 생성 버튼 (모드별) -->
+<!-- ========================================================== -->
+<div class="generate-section">
+  <div class="checklist" id="checklist-automation" style="display:none;">
+    <h3>자가 점검</h3>
+    <div id="checklist-items"></div>
+  </div>
+  <button class="btn" id="generate-btn" onclick="generate()">프롬프트 생성</button>
+</div>
+
+<!-- ========================================================== -->
+<!-- 출력 -->
+<!-- ========================================================== -->
+
+<!-- 단일 출력 (최소형·표준형) -->
+<div class="output" id="output-single">
+  <div class="output-label">완성된 프롬프트 — AI에 그대로 붙여넣으세요</div>
+  <div class="output-panel"><pre id="out-single"></pre></div>
+  <div class="output-actions">
+    <button class="copy-btn" onclick="copySingle()" id="copy-single">복사</button>
+    <button class="copy-btn" onclick="downloadSingle()">다운로드(.txt)</button>
+  </div>
+</div>
+
+<!-- 듀얼 출력 (자동화) -->
+<div class="output" id="output-dual">
+  <div class="output-tabs">
+    <button class="output-tab active" onclick="switchTab('notion')">Notion 마크다운</button>
+    <button class="output-tab" onclick="switchTab('ai')">AI 의뢰 프롬프트</button>
+  </div>
+  <div class="output-panel tabbed active" id="panel-notion"><pre id="out-notion"></pre></div>
+  <div class="output-panel tabbed" id="panel-ai"><pre id="out-ai"></pre></div>
+  <div class="output-actions">
+    <button class="copy-btn" onclick="copyDual()" id="copy-dual">복사</button>
+    <button class="copy-btn" onclick="downloadDual()">다운로드(.md)</button>
+  </div>
+</div>
+
+<footer>
+  한백 · AI 프롬프트 작성 도우미 v2.0 (통합)<br>
+  <button class="reset-link" onclick="resetForm()">현재 모드 초기화</button>
+</footer>
+
+</div>
+
+<script>
+// ============================================================
+// 모드 관리
+// ============================================================
+let currentMode = 'minimal';
+
+function setMode(mode) {
+  currentMode = mode;
+  document.body.setAttribute('data-mode', mode);
+
+  // 버튼
+  ['minimal', 'standard', 'automation'].forEach(m => {
+    document.getElementById(`btn-${m}`).classList.toggle('active', m === mode);
+    document.getElementById(`panel-${m}`).classList.toggle('active', m === mode);
+    const tip = document.getElementById(`tip-${m}`);
+    if (tip) tip.style.display = (m === mode) ? 'block' : 'none';
+  });
+
+  // 자동화 모드 전용 UI
+  document.getElementById('checklist-automation').style.display = (mode === 'automation') ? 'block' : 'none';
+  document.querySelector('#panel-automation .progress').style.display = (mode === 'automation') ? 'flex' : 'none';
+
+  // 출력 숨김
+  document.getElementById('output-single').classList.remove('visible');
+  document.getElementById('output-dual').classList.remove('visible');
+
+  updateButton();
+  if (mode === 'automation') updateAutoProgress();
+}
+
+// ============================================================
+// 입력 검증
+// ============================================================
+function getRequiredOK() {
+  if (currentMode === 'minimal') {
+    return ['m-r', 'm-i', 'm-s'].every(id => document.getElementById(id).value.trim());
+  }
+  if (currentMode === 'standard') {
+    return ['s-r', 's-i', 's-s'].every(id => document.getElementById(id).value.trim());
+  }
+  if (currentMode === 'automation') {
+    const text = ['a-q1', 'a-q2', 'a-q3', 'a-q5'].every(id => document.getElementById(id).value.trim());
+    const radio = !!document.querySelector('input[name="a-q4"]:checked');
+    return text && radio;
+  }
+  return false;
+}
+
+function updateButton() {
+  const ok = getRequiredOK();
+  const btn = document.getElementById('generate-btn');
+  btn.disabled = !ok;
+  if (currentMode === 'minimal') {
+    btn.textContent = ok ? '프롬프트 생성' : 'R · I · S 를 채워주세요';
+  } else if (currentMode === 'standard') {
+    btn.textContent = ok ? '프롬프트 생성' : 'R · I · S 를 채워주세요';
+  } else {
+    btn.textContent = ok ? '의뢰서 생성' : '필수 5개를 먼저 채워주세요';
+  }
+}
+
+// ============================================================
+// 자동화 모드: 진행률·체크리스트
+// ============================================================
+const autoFields = {
+  required: ['a-q1', 'a-q2', 'a-q3', 'a-q4', 'a-q5'],
+  recommended: ['a-q6', 'a-q7', 'a-q8', 'a-q9', 'a-q10', 'a-q11', 'a-q12']
+};
+
+function getAutoFieldValue(id) {
+  if (id === 'a-q4' || id === 'a-q10') {
+    const el = document.querySelector(`input[name="${id}"]:checked`);
+    return el ? el.value : '';
+  }
+  if (id === 'a-q6' || id === 'a-q9') {
+    const checked = Array.from(document.querySelectorAll(`input[name="${id}"]:checked`)).map(e=>e.value);
+    const other = document.getElementById(`${id}-other`)?.value.trim();
+    if (other) checked.push(other);
+    return checked.join(', ');
+  }
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+
+function updateAutoProgress() {
+  if (currentMode !== 'automation') return;
+  const all = [...autoFields.required, ...autoFields.recommended];
+  let filled = 0;
+  all.forEach(f => { if (getAutoFieldValue(f)) filled++; });
+  const total = all.length;
+  const pct = Math.round((filled / total) * 100);
+  document.getElementById('auto-progress-count').textContent = `${filled} / ${total}`;
+  document.getElementById('auto-progress-pct').textContent = `${pct}%`;
+  document.getElementById('auto-progress-bar').style.width = `${pct}%`;
+  updateAutoChecklist();
+}
+
+function updateAutoChecklist() {
+  const items = [
+    { label: '필수 5개 모두 채워졌는가', check: () => autoFields.required.every(f => getAutoFieldValue(f)) },
+    { label: '문제 정의에 숫자가 있는가', check: () => /\d/.test(getAutoFieldValue('a-q1')) },
+    { label: '성공 기준에 측정 지표가 있는가', check: () => /\d/.test(getAutoFieldValue('a-q3')) },
+    { label: '결과물 보는 사람이 명시되어 있는가', check: () => getAutoFieldValue('a-q5').length > 20 },
+    { label: '제약사항 검토 완료', check: () => getAutoFieldValue('a-q12').length > 0 }
+  ];
+  const html = items.map(it => {
+    const ok = it.check();
+    return `<div class="checklist-item">
+      <span class="checklist-icon ${ok?'done':'todo'}">${ok?'✓':'○'}</span>
+      <span style="${ok?'color:var(--ink)':'color:var(--ink-faint)'}">${it.label}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('checklist-items').innerHTML = html;
+}
+
+function toggleAutoModule(id) {
+  const section = document.getElementById(`${id}-section`);
+  const toggle = document.getElementById(`${id}-toggle`);
+  const icon = document.getElementById(`${id}-icon`);
+  if (section.style.display === 'none') {
+    section.style.display = 'block';
+    toggle.classList.add('active');
+    icon.textContent = '✕ 제외';
+  } else {
+    section.style.display = 'none';
+    toggle.classList.remove('active');
+    icon.textContent = '+ 추가';
+    document.getElementById(`a-${id}`).value = '';
+  }
+}
+
+// ============================================================
+// 비주얼 업데이트 + 진행률 추적
+// ============================================================
+document.addEventListener('change', (e) => {
+  if (e.target.type === 'checkbox' && e.target.closest('.checkbox-item')) {
+    e.target.closest('.checkbox-item').classList.toggle('checked', e.target.checked);
+  }
+  if (e.target.type === 'radio') {
+    document.querySelectorAll(`input[name="${e.target.name}"]`).forEach(r => {
+      r.closest('.radio-item').classList.toggle('checked', r.checked);
+    });
+  }
+  updateButton();
+  if (currentMode === 'automation') updateAutoProgress();
+});
+document.addEventListener('input', () => {
+  updateButton();
+  if (currentMode === 'automation') updateAutoProgress();
+});
+
+// ============================================================
+// 생성
+// ============================================================
+function generate() {
+  if (currentMode === 'minimal') generateMinimal();
+  else if (currentMode === 'standard') generateStandard();
+  else if (currentMode === 'automation') generateAutomation();
+}
+
+function generateMinimal() {
+  const r = document.getElementById('m-r').value.trim();
+  const i = document.getElementById('m-i').value.trim();
+  const s = document.getElementById('m-s').value.trim();
+  const prompt = `[역할]\n${r}\n\n[요청]\n${i}\n\n[결과물 형식]\n${s}`;
+  showSingle(prompt);
+}
+
+function generateStandard() {
+  const c = document.getElementById('s-c').value.trim();
+  const r = document.getElementById('s-r').value.trim();
+  const i = document.getElementById('s-i').value.trim();
+  const s = document.getElementById('s-s').value.trim();
+  const p = document.getElementById('s-p').value.trim();
+  let prompt = '';
+  if (c) prompt += `[배경]\n${c}\n\n`;
+  prompt += `[역할]\n${r}\n\n[요청]\n${i}\n\n[결과물 형식]\n${s}`;
+  if (p) prompt += `\n\n[제약·금지]\n${p}`;
+  showSingle(prompt);
+}
+
+function showSingle(text) {
+  document.getElementById('out-single').textContent = text;
+  document.getElementById('output-single').classList.add('visible');
+  document.getElementById('output-dual').classList.remove('visible');
+  document.getElementById('output-single').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function generateAutomation() {
+  const data = {
+    title: document.getElementById('a-meta-title').value.trim() || '제목 없음',
+    author: document.getElementById('a-meta-author').value.trim() || '',
+    date: new Date().toISOString().slice(0, 10),
+    q1: getAutoFieldValue('a-q1'),
+    q2: getAutoFieldValue('a-q2'),
+    q3: getAutoFieldValue('a-q3'),
+    q4: getAutoFieldValue('a-q4'),
+    q5: getAutoFieldValue('a-q5'),
+    q6: getAutoFieldValue('a-q6'),
+    q7: getAutoFieldValue('a-q7'),
+    q8: getAutoFieldValue('a-q8'),
+    q9: getAutoFieldValue('a-q9'),
+    q10: getAutoFieldValue('a-q10'),
+    q11: getAutoFieldValue('a-q11'),
+    q12: getAutoFieldValue('a-q12'),
+    m1: getAutoFieldValue('a-m1'),
+    m2: getAutoFieldValue('a-m2')
+  };
+  document.getElementById('out-notion').textContent = renderNotion(data);
+  document.getElementById('out-ai').textContent = renderAI(data);
+  document.getElementById('output-dual').classList.add('visible');
+  document.getElementById('output-single').classList.remove('visible');
+  document.getElementById('output-dual').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderNotion(d) {
+  let s = `# 자동화 의뢰: ${d.title}\n`;
+  s += `작성일: ${d.date}${d.author ? ` / 의뢰자: ${d.author}` : ''}\n\n`;
+  s += `## [필수]\n\n### 1. 문제 정의\n${d.q1}\n\n### 2. 현재 처리 방식 (As-Is)\n${d.q2}\n\n### 3. 성공 기준\n${d.q3}\n\n### 4. 솔루션 수명\n- ${d.q4}\n\n### 5. 결과물 위치\n${d.q5}\n\n`;
+  s += `## [권장]\n\n### 6. 산출물 형식\n${d.q6 || '(미작성)'}\n\n### 7. 결과물 예시\n${d.q7 || '(미작성)'}\n\n### 8. 참고 링크·자료\n${d.q8 || '(미작성)'}\n\n### 9. 톤·문체\n${d.q9 || '(미작성)'}\n\n### 10. 솔루션 형태\n- ${d.q10 || '모르겠음 — AI 추천 요청'}\n\n### 11. 사용자·빈도\n${d.q11 || '(미작성)'}\n\n### 12. 제약사항\n${d.q12 || '(미작성)'}\n\n`;
+  if (d.m1 || d.m2) {
+    s += `## [선택 모듈]\n\n`;
+    if (d.m1) s += `### M1. 사전 조사\n${d.m1}\n\n`;
+    if (d.m2) s += `### M2. 단계별 검증\n${d.m2}\n\n`;
+  }
+  return s;
+}
+
+function renderAI(d) {
+  let s = `# 자동화 설계 의뢰\n\n당신은 AI 자동화 설계자입니다.\n아래 의뢰서를 검토하고, 다음 작업을 순차로 수행해주세요.\n\n## 당신의 역할\n\n1. **요구사항 분석**: 의뢰서에서 모호하거나 누락된 부분을 지적해주세요.\n2. **솔루션 옵션 비교**: 가능한 구현 방식 2~3개를 비교 매트릭스로 제시해주세요.\n3. **권고안 제시**: 의뢰서의 제약사항을 고려한 권고 1개와 그 근거를 명시해주세요.\n4. **다음 단계**: 의뢰자가 즉시 시작할 수 있는 첫 액션 3개를 제시해주세요.\n\n## 출력 형식\n\n- 개조식, Notion 마크다운\n- 분량: A4 1~2쪽\n- 권고안에는 위험·비용·기간을 반드시 포함\n- 추측이 들어간 부분은 [확인필요] 표시\n\n## 의뢰서\n\n### 기본 정보\n- 제목: ${d.title}\n- 의뢰자: ${d.author || '(미기재)'}\n- 작성일: ${d.date}\n\n### 1. 문제 정의\n${d.q1}\n\n### 2. 현재 처리 방식 (As-Is)\n${d.q2}\n\n### 3. 성공 기준\n${d.q3}\n\n### 4. 솔루션 수명\n${d.q4}\n\n### 5. 결과물 위치\n${d.q5}\n\n`;
+  if (d.q6) s += `### 6. 원하는 산출물 형식\n${d.q6}\n\n`;
+  if (d.q7) s += `### 7. 결과물 예시\n${d.q7}\n\n`;
+  if (d.q8) s += `### 8. 참고 링크·자료\n${d.q8}\n\n`;
+  if (d.q9) s += `### 9. 톤·문체\n${d.q9}\n\n`;
+  s += `### 10. 솔루션 형태 선호\n${d.q10 || '미정 — 당신이 추천해주세요'}\n\n`;
+  if (d.q11) s += `### 11. 사용자·빈도\n${d.q11}\n\n`;
+  if (d.q12) s += `### 12. 제약사항\n${d.q12}\n\n`;
+  if (d.m1) s += `### M1. 사전 조사 요구\n${d.m1}\n\n`;
+  if (d.m2) s += `### M2. 단계별 검증 요구\n${d.m2}\n\n`;
+  s += `---\n\n위 의뢰서를 바탕으로 작업을 시작해주세요.`;
+  return s;
+}
+
+// ============================================================
+// 출력 탭 / 복사 / 다운로드
+// ============================================================
+function switchTab(which) {
+  document.querySelectorAll('.output-tab').forEach((t, i) => {
+    const isActive = (which === 'notion' && i === 0) || (which === 'ai' && i === 1);
+    t.classList.toggle('active', isActive);
+  });
+  document.getElementById('panel-notion').classList.toggle('active', which === 'notion');
+  document.getElementById('panel-ai').classList.toggle('active', which === 'ai');
+}
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '복사 완료';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+  });
+}
+
+function copySingle() {
+  copyText(document.getElementById('out-single').textContent, document.getElementById('copy-single'));
+}
+
+function copyDual() {
+  const isNotion = document.getElementById('panel-notion').classList.contains('active');
+  const text = isNotion ? document.getElementById('out-notion').textContent : document.getElementById('out-ai').textContent;
+  copyText(text, document.getElementById('copy-dual'));
+}
+
+function downloadFile(text, filename) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function downloadSingle() {
+  const text = document.getElementById('out-single').textContent;
+  const filename = `prompt_${currentMode}_${new Date().toISOString().slice(0, 10)}.txt`;
+  downloadFile(text, filename);
+}
+
+function downloadDual() {
+  const isNotion = document.getElementById('panel-notion').classList.contains('active');
+  const text = isNotion ? document.getElementById('out-notion').textContent : document.getElementById('out-ai').textContent;
+  const name = isNotion ? 'notion' : 'ai';
+  const title = document.getElementById('a-meta-title').value.trim() || 'automation_spec';
+  const filename = `${title.replace(/[^\w가-힣]/g, '_')}_${name}.md`;
+  downloadFile(text, filename);
+}
+
+// ============================================================
+// 초기화
+// ============================================================
+function resetForm() {
+  if (!confirm('현재 모드의 입력을 초기화하시겠습니까?')) return;
+  if (currentMode === 'minimal') {
+    document.getElementById('form-minimal').reset();
+  } else if (currentMode === 'standard') {
+    document.getElementById('form-standard').reset();
+  } else {
+    document.getElementById('form-automation').reset();
+    document.querySelectorAll('#panel-automation .checkbox-item').forEach(el => el.classList.remove('checked'));
+    document.querySelectorAll('#panel-automation .radio-item').forEach(el => el.classList.remove('checked'));
+    document.getElementById('m1-section').style.display = 'none';
+    document.getElementById('m2-section').style.display = 'none';
+    document.getElementById('m1-toggle').classList.remove('active');
+    document.getElementById('m2-toggle').classList.remove('active');
+    document.getElementById('m1-icon').textContent = '+ 추가';
+    document.getElementById('m2-icon').textContent = '+ 추가';
+    updateAutoProgress();
+  }
+  document.getElementById('output-single').classList.remove('visible');
+  document.getElementById('output-dual').classList.remove('visible');
+  updateButton();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 초기 상태
+updateButton();
+</script>
+</body>
+</html>
